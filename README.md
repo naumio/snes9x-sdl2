@@ -1,4 +1,4 @@
-snes9x-sdl
+snes9x-sdl2
 ----------
-sdl port of Snes9x - Portable Super Nintendo
+SDL2 port of Snes9x - Portable Super Nintendo
 Entertainment System (TM) emulator http://www.snes9x.com
