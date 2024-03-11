@@ -65,7 +65,7 @@
 #include "debug.h"
 #endif
 
-#include <SDL/SDL.h>
+#include <SDL2/SDL.h>
 //#include "sdl_snes9x.h"
 
 SDL_AudioSpec *audiospec;

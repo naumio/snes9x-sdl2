@@ -317,7 +317,7 @@ void S9xInitInputDevices (void)
 		for (int i = 0; i < num_joysticks; i++)
 		{
 			joystick[i] = SDL_JoystickOpen (i);
-			printf ("  %s\n", SDL_JoystickName(i));
+			printf ("  %s\n", SDL_JoystickName(joystick[i]));
 			printf ("  %d-axis %d-buttons %d-balls %d-hats \n",
 				SDL_JoystickNumAxes(joystick[i]),
 				SDL_JoystickNumButtons(joystick[i]),
@@ -351,7 +351,7 @@ void S9xProcessEvents (bool8 block)
 			break;
 
 /***** Joystick starts *****/
-#if 0
+
 		case SDL_JOYBUTTONDOWN:
 		case SDL_JOYBUTTONUP:
 			S9xReportButton(0x80000000 | // joystick button
@@ -366,7 +366,7 @@ void S9xProcessEvents (bool8 block)
 				      event.jaxis.axis, // joystick axis
 				      event.jaxis.value); // axis value
 			break;
-#endif
+
 /***** Joystick ends *****/
 
 		case SDL_QUIT:

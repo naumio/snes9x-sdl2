@@ -234,8 +234,8 @@ AC_CHECK_FUNC([mkstemp],
 
 AC_CACHE_VAL([snes9x_cv_sdl],
 [
-	AC_CHECK_HEADER([SDL/SDL.h],
-		[AC_CHECK_LIB([SDL], [SDL_Init], [snes9x_cv_sdl="yes"], [snes9x_cv_sdl="no"])],
+	AC_CHECK_HEADER([SDL2/SDL.h],
+		[AC_CHECK_LIB([SDL2], [SDL_Init], [snes9x_cv_sdl="yes"], [snes9x_cv_sdl="no"])],
 		[snes9x_cv_sdl="no"])
 ])
 
@@ -243,7 +243,7 @@ if test "x$snes9x_cv_sdl" = "xyes"; then
   	S9XFLGS="$S9XFLGS `sdl-config --cflags`"
 	S9XLIBS="$S9XLIBS `sdl-config --libs`"
 else
-	AC_MSG_ERROR([SDL is required.])
+	AC_MSG_ERROR([SDL2 is required.])
 fi
 
 ###

@@ -52,16 +52,24 @@
 
 #include "sdl_snes9x.h"
 
-struct GUIData
+typedef struct
 {
-	SDL_Surface             *sdl_screen;
+	SDL_Window  	*sdlWindow;    // SDL2
+	SDL_Texture     *sdlTexture;   // SDL2
+    SDL_Renderer    *sdlRenderer;  // SDL2
+	SDL_Surface     *sdl_screen;
+	SDL_Rect		*p_screen_rect;
+	SDL_Rect		sdl_screen_rect;
 	uint8			*snes_buffer;
 	uint8			*blit_screen;
 	uint32			blit_screen_pitch;
-	int			video_mode;
-        bool8                   fullscreen;
-};
-static struct GUIData	GUI;
+	int			    video_mode;
+    bool8           fullscreen;
+	int 			screen_width;
+	int 			screen_height;
+} GUIData;
+
+static GUIData GUI;
 
 typedef	void (* Blitter) (uint8 *, int, uint8 *, int, int, int);
 
@@ -92,7 +100,6 @@ enum
 
 static void SetupImage (void);
 static void TakedownImage (void);
-static void Repaint (bool8);
 
 void S9xExtraDisplayUsage (void)
 {
@@ -106,6 +113,7 @@ void S9xExtraDisplayUsage (void)
 	S9xMessage(S9X_INFO, S9X_USAGE, "-v6                             Video mode: Super2xSaI");
 	S9xMessage(S9X_INFO, S9X_USAGE, "-v7                             Video mode: EPX");
 	S9xMessage(S9X_INFO, S9X_USAGE, "-v8                             Video mode: hq2x");
+	S9xMessage(S9X_INFO, S9X_USAGE, "-res WIDTHxHEIGHT               Screen resolution");
 	S9xMessage(S9X_INFO, S9X_USAGE, "");
 }
 
@@ -116,8 +124,7 @@ void S9xParseDisplayArg (char **argv, int &i, int argc)
                 GUI.fullscreen = TRUE;
                 printf ("Entering fullscreen mode (without scaling).\n");
         }
-        else
-	if (!strncasecmp(argv[i], "-v", 2))
+	else if (!strncasecmp(argv[i], "-v", 2))
 	{
 		switch (argv[i][2])
 		{
@@ -129,6 +136,29 @@ void S9xParseDisplayArg (char **argv, int &i, int argc)
 			case '6':	GUI.video_mode = VIDEOMODE_SUPER2XSAI;	break;
 			case '7':	GUI.video_mode = VIDEOMODE_EPX;			break;
 			case '8':	GUI.video_mode = VIDEOMODE_HQ2X;		break;
+		}
+	}
+	else if (!strncasecmp(argv[i], "-res", 4))
+	{
+		char res_str[32];
+
+		if ((i + 1) < argc)
+		{
+			if (strlen(argv[i+1]) < 32)
+			{
+				// Copy resolution setting to a buffer
+				memset(res_str, 0, 32);
+				strcpy(res_str, argv[i+1]);
+
+				// Now it is safe to strtok() the parameter
+				char *p_width = strtok(res_str, "x");
+				char *p_height = strtok(NULL, "x");
+				if ((p_width != NULL) && (p_height != NULL))
+				{
+					GUI.screen_width = atoi(p_width);
+					GUI.screen_height = atoi(p_height);
+				}
+			}
 		}
 	}
 	else
@@ -160,9 +190,14 @@ static void FatalError (const char *str)
 
 void S9xInitDisplay (int argc, char **argv)
 {
+	printf("Initializing SDL2...\n");
 	if (SDL_Init(SDL_INIT_VIDEO) != 0)
 	{
 		printf("Unable to initialize SDL: %s\n", SDL_GetError());
+	}
+	else
+	{
+		printf("SDL2 initialized.\n");
 	}
   
 	atexit(SDL_Quit);
@@ -179,25 +214,58 @@ void S9xInitDisplay (int argc, char **argv)
 	S9xBlit2xSaIFilterInit();
 	S9xBlitHQ2xFilterInit();
 
-
-	/*
-	 * domaemon
-	 *
-	 * FIXME: The secreen size should be flexible
-	 * FIXME: Check if the SDL screen is really in RGB565 mode. screen->fmt	
-	 */	
-        if (GUI.fullscreen == TRUE)
-        {
-                GUI.sdl_screen = SDL_SetVideoMode(0, 0, 16, SDL_FULLSCREEN);
-        } else {
-                GUI.sdl_screen = SDL_SetVideoMode(SNES_WIDTH * 2, SNES_HEIGHT_EXTENDED * 2, 16, 0);
-        }
-
-        if (GUI.sdl_screen == NULL)
+	// Check screen resolution, given as parameter earlier
+	if ((GUI.screen_width == 0) || (GUI.screen_height == 0))
 	{
-		printf("Unable to set video mode: %s\n", SDL_GetError());
+		GUI.screen_width = SNES_WIDTH * 2;
+		GUI.screen_height = SNES_HEIGHT_EXTENDED * 2; 
+	}
+
+	if (GUI.fullscreen)
+	{
+		GUI.sdl_screen_rect.w = GUI.screen_height * (SNES_WIDTH * 2) / (SNES_HEIGHT_EXTENDED * 2); 
+		GUI.sdl_screen_rect.h = GUI.screen_height; 
+		GUI.sdl_screen_rect.x = (GUI.screen_width - GUI.sdl_screen_rect.w) / 2; 
+		GUI.sdl_screen_rect.y = 0; 
+		GUI.p_screen_rect = &GUI.sdl_screen_rect; 
+	}
+	else
+	{
+		GUI.p_screen_rect = NULL;	// This will stretch the texture to fill the window
+	}
+
+
+	GUI.sdlWindow = SDL_CreateWindow("Snes9x",
+						SDL_WINDOWPOS_CENTERED,
+						SDL_WINDOWPOS_CENTERED,
+						GUI.screen_width, GUI.screen_height,
+						0);
+
+	if (GUI.sdlWindow == NULL)
+	{
+		printf("Unable to create SDL window: %s\n", SDL_GetError());
 		exit(1);
-        }
+	}
+
+
+	GUI.sdlRenderer = SDL_CreateRenderer(GUI.sdlWindow, -1, SDL_RENDERER_ACCELERATED);
+
+	if (GUI.sdlRenderer == NULL)
+	{
+		printf("Unable to create SDL renderer: %s\n", SDL_GetError());
+		exit(1);
+	}
+
+	GUI.sdl_screen = SDL_CreateRGBSurface(0, SNES_WIDTH * 2, SNES_HEIGHT_EXTENDED * 2, 32,
+											0x00FF0000,
+											0x0000FF00,
+											0x000000FF,
+											0xFF000000);
+
+	GUI.sdlTexture = SDL_CreateTexture(GUI.sdlRenderer,
+										SDL_PIXELFORMAT_RGB565,
+										SDL_TEXTUREACCESS_TARGET,
+										SNES_WIDTH * 2, SNES_HEIGHT_EXTENDED);
 
 	/*
 	 * domaemon
@@ -233,6 +301,10 @@ static void SetupImage (void)
 {
 	TakedownImage();
 
+    SDL_SetRenderDrawColor(GUI.sdlRenderer, 0, 0, 0, 255);
+    SDL_RenderClear(GUI.sdlRenderer);
+    SDL_RenderPresent(GUI.sdlRenderer);
+
 	// domaemon: The whole unix code basically assumes output=(original * 2);
 	// This way the code can handle the SNES filters, which does the 2X.
 	GFX.Pitch = SNES_WIDTH * 2 * 2;
@@ -242,27 +314,8 @@ static void SetupImage (void)
 
 	// domaemon: Add 2 lines before drawing.
 	GFX.Screen = (uint16 *) (GUI.snes_buffer + (GFX.Pitch * 2 * 2));
-
-	if (GUI.fullscreen == TRUE)
-	{
-		int offset_height_pix;
-		int offset_width_pix;
-		int offset_byte;
-
-
-		offset_height_pix = (GUI.sdl_screen->h - (SNES_HEIGHT * 2)) / 2;
-		offset_width_pix = (GUI.sdl_screen->w - (SNES_WIDTH * 2)) / 2;
-		
-		offset_byte = (GUI.sdl_screen->w * offset_height_pix + offset_width_pix) * 2;
-
-		GUI.blit_screen       = (uint8 *) GUI.sdl_screen->pixels + offset_byte;
-		GUI.blit_screen_pitch = GUI.sdl_screen->w * 2;
-	}
-	else 
-	{
-		GUI.blit_screen       = (uint8 *) GUI.sdl_screen->pixels;
-		GUI.blit_screen_pitch = SNES_WIDTH * 2 * 2; // window size =(*2); 2 byte pir pixel =(*2)
-	}
+	GUI.blit_screen       = (uint8 *) GUI.sdl_screen->pixels;
+	GUI.blit_screen_pitch = SNES_WIDTH * 2 * 2; // window size =(*2); 2 byte pir pixel =(*2)
 
 	S9xGraphicsInit();
 }
@@ -270,7 +323,6 @@ static void SetupImage (void)
 void S9xPutImage (int width, int height)
 {
 	static int	prevWidth = 0, prevHeight = 0;
-	int			copyWidth, copyHeight;
 	Blitter		blitFn = NULL;
 
 	if (GUI.video_mode == VIDEOMODE_BLOCKY || GUI.video_mode == VIDEOMODE_TV || GUI.video_mode == VIDEOMODE_SMOOTH)
@@ -281,15 +333,10 @@ void S9xPutImage (int width, int height)
 	{
 		if (height > SNES_HEIGHT_EXTENDED)
 		{
-			copyWidth  = width * 2;
-			copyHeight = height;
 			blitFn = S9xBlitPixSimple2x1;
 		}
 		else
 		{
-			copyWidth  = width  * 2;
-			copyHeight = height * 2;
-
 			switch (GUI.video_mode)
 			{
 				case VIDEOMODE_BLOCKY:		blitFn = S9xBlitPixSimple2x2;		break;
@@ -306,9 +353,6 @@ void S9xPutImage (int width, int height)
 	else
 	if (height <= SNES_HEIGHT_EXTENDED)
 	{
-		copyWidth  = width;
-		copyHeight = height * 2;
-
 		switch (GUI.video_mode)
 		{
 			default:					blitFn = S9xBlitPixSimple1x2;	break;
@@ -317,8 +361,6 @@ void S9xPutImage (int width, int height)
 	}
 	else
 	{
-		copyWidth  = width;
-		copyHeight = height;
 		blitFn = S9xBlitPixSimple1x1;
 	}
 
@@ -330,6 +372,7 @@ void S9xPutImage (int width, int height)
 	if (height < prevHeight)
 	{
 		int	p = GUI.blit_screen_pitch >> 2;
+        
 		for (int y = SNES_HEIGHT * 2; y < SNES_HEIGHT_EXTENDED * 2; y++)
 		{
 			uint32	*d = (uint32 *) (GUI.blit_screen + y * GUI.blit_screen_pitch);
@@ -338,15 +381,13 @@ void S9xPutImage (int width, int height)
 		}
 	}
 
-	Repaint(TRUE);
+    SDL_UpdateTexture(GUI.sdlTexture, NULL, GUI.sdl_screen->pixels, GUI.sdl_screen->pitch);
+    SDL_RenderClear(GUI.sdlRenderer);
+    SDL_RenderCopy(GUI.sdlRenderer, GUI.sdlTexture, NULL, GUI.p_screen_rect);
+    SDL_RenderPresent(GUI.sdlRenderer);
 
 	prevWidth  = width;
 	prevHeight = height;
-}
-
-static void Repaint (bool8 isFrameBoundry)
-{
-        SDL_Flip(GUI.sdl_screen);
 }
 
 void S9xMessage (int type, int number, const char *message)
@@ -375,7 +416,7 @@ const char * S9xStringInput (const char *message)
 
 void S9xSetTitle (const char *string)
 {
-	SDL_WM_SetCaption(string, string);
+	// NOTE: SDL1 function: SDL_WM_SetCaption(string, string);
 }
 
 void S9xSetPalette (void)
