@@ -179,6 +179,7 @@
 #include <string>
 #include <numeric>
 #include <assert.h>
+#include <unistd.h>
 
 #ifdef UNZIP_SUPPORT
 #include "unzip/unzip.h"

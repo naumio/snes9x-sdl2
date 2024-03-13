@@ -16,7 +16,7 @@
  *****/
 
 
-#define _SPC7110EMU_CPP_
+// #define _SPC7110EMU_CPP_
 
 #include "spc7110dec.cpp"
 

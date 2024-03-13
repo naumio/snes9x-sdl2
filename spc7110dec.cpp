@@ -15,8 +15,9 @@
  * or in connection with the use or performance of this software.
  *****/
 
+//#include "port.h"
 
-#ifdef _SPC7110EMU_CPP_
+// #ifdef _SPC7110EMU_CPP_
 
 uint8 SPC7110Decomp::read() {
   if(decomp_buffer_length == 0) {
@@ -526,4 +527,4 @@ SPC7110Decomp::~SPC7110Decomp() {
   delete[] decomp_buffer;
 }
 
-#endif
+// #endif
